@@ -7,20 +7,33 @@
   "scripts": {
     "dev": "concurrently -k -n PY,VITE,ELECTRON -c blue,green,magenta \"npm:dev:py\" \"npm:dev:web\" \"npm:dev:electron\"",
     "dev:py": "cd backend && .venv\\Scripts\\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8765 --reload --reload-dir app",
+    "dev:py:mac": "cd backend && ./.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8765 --reload --reload-dir app",
     "dev:web": "cd frontend && npm run dev",
     "dev:electron": "wait-on http-get://127.0.0.1:5173 http-get://127.0.0.1:8765/health && cross-env NODE_ENV=development electron .",
+    "dev:mac": "concurrently -k -n PY,VITE,ELECTRON -c blue,green,magenta \"npm:dev:py:mac\" \"npm:dev:web\" \"npm:dev:electron\"",
     "build:web": "cd frontend && npm run build",
-    "build:py": "cd backend && .venv\\Scripts\\python.exe -m PyInstaller --noconfirm --clean --onedir --name auto-resume-backend --collect-all patchright --collect-all uvicorn --collect-submodules app --hidden-import app.main run_server.py",
+    "build:py": "npm run build:py:win",
+    "build:py:win": "cd backend && .venv\\Scripts\\python.exe -m PyInstaller --noconfirm --clean --onedir --name auto-resume-backend --collect-all patchright --collect-all uvicorn --collect-submodules app --hidden-import app.main run_server.py",
+    "build:py:mac": "cd backend && ./.venv/bin/python -m PyInstaller --noconfirm --clean --onedir --name auto-resume-backend --collect-all patchright --collect-all uvicorn --collect-submodules app --hidden-import app.main run_server.py",
     "build:browser": "node scripts/copy-browser.cjs",
-    "build:all": "npm run build:web && npm run build:py && npm run build:browser",
-    "dist": "npm run build:all && electron-builder --win nsis --x64",
-    "dist:dir": "npm run build:all && electron-builder --win dir --x64",
+    "build:all": "npm run build:all:win",
+    "build:all:win": "npm run build:web && npm run build:py:win && npm run build:browser",
+    "build:all:mac": "npm run build:web && npm run build:py:mac && npm run build:browser",
+    "dist": "npm run dist:win",
+    "dist:win": "npm run build:all:win && electron-builder --win nsis --x64",
+    "dist:dir": "npm run build:all:win && electron-builder --win dir --x64",
+    "dist:mac": "npm run build:all:mac && electron-builder --mac --x64 --arm64",
+    "dist:mac:dmg": "npm run build:all:mac && electron-builder --mac dmg",
+    "dist:mac:dir": "npm run build:all:mac && electron-builder --mac dir",
     "install:all": "npm install && cd frontend && npm install"
   },
   "build": {
     "appId": "com.autoresume.boss",
     "productName": "BOSS自动招呼助手",
     "asar": true,
+    "asarUnpack": [
+      "**/node_modules/**/*.node"
+    ],
     "toolsets": {
       "winCodeSign": "1.0.0"
     },
@@ -53,6 +66,25 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "BOSS自动招呼助手"
+    },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ],
+      "category": "public.app-category.productivity",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null,
+      "extendInfo": {
+        "NSCameraUsageDescription": "用于扫码登录 BOSS 直聘",
+        "NSAppleEventsUsageDescription": "用于自动化操作浏览器"
+      }
+    },
+    "dmg": {
+      "title": "${productName} ${version}",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     }
   },
   "devDependencies": {

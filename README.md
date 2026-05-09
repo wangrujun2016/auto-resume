@@ -74,11 +74,11 @@ npm run dev
 
 会同时启动三个进程：
 
-| 名称 | 端口 / 说明 |
-| --- | --- |
-| `PY` | Python FastAPI（127.0.0.1:8765） |
-| `VITE` | React 前端开发服务器（127.0.0.1:5173） |
-| `ELECTRON` | Electron 桌面壳，加载前端 |
+| 名称       | 端口 / 说明                            |
+| ---------- | -------------------------------------- |
+| `PY`       | Python FastAPI（127.0.0.1:8765）       |
+| `VITE`     | React 前端开发服务器（127.0.0.1:5173） |
+| `ELECTRON` | Electron 桌面壳，加载前端              |
 
 Electron 窗口出现后，你就能看到主界面。
 
@@ -89,13 +89,15 @@ Electron 窗口出现后，你就能看到主界面。
 ## 四、使用流程
 
 1. **新建账号任务**：左上角「+ 新建账号任务」按钮
-   - 任务别名：随便起一个，用于区分账号（如「账号A - Python 后端」）
+
+   - 任务别名：随便起一个，用于区分账号（如「账号 A - Python 后端」）
    - 关键词：BOSS 搜索框里的内容
    - 其他筛选项：可选
    - 招呼语：可留空（用 BOSS 默认），也可写多条（每行一条，每次随机选一条更像真人）
    - 间隔秒数 / 每日上限：默认 30s / 10 次
 
 2. **点击「开始」**：会弹出一个独立的 Chromium 窗口
+
    - 第一次需要自己手动登录（扫码或账密均可）
    - 登录成功后程序自动跳转到搜索页，开始打招呼
    - 之后再次启动同一个任务，**会复用上次的 cookie 自动登录**
@@ -168,12 +170,85 @@ BOSS 前端会改 DOM。`backend/app/services/boss_automator.py` 里的选择器
 
 ---
 
-## 七、生产打包（可选，后续）
+## 七、生产打包
 
-当前 `dev` 已经能跑通完整流程。后续如需打成单个 .exe：
+> 浏览器二进制（Chromium）是平台专属，**Windows 包必须在 Windows 上打，macOS 包必须在 macOS 上打**，不能交叉编译。
 
-- Electron 用 `electron-builder` 打包
-- Python 用 `pyinstaller` 打包成 sidecar exe，放到 Electron extraResources
-- `electron/main.cjs` 中 `startPythonBackend()` 改为 spawn 那个 exe
+### 7.1 Windows（在 Windows 上）
 
-需要再来找我。
+```powershell
+$env:CSC_IDENTITY_AUTO_DISCOVERY="false"
+npm run dist:win
+```
+
+产物：
+
+| 路径 | 用途 |
+| --- | --- |
+| `release/BOSS自动招呼助手-Setup-0.1.0.exe` | NSIS 安装包（双击安装） |
+| `release/win-unpacked/` | 解压版（直接跑里面的 .exe，不用安装） |
+
+### 7.2 macOS（在 Mac 上）
+
+依赖一次性准备：
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install pyinstaller==6.10.0
+python -m patchright install chromium
+cd ..
+npm run install:all
+```
+
+打包：
+
+```bash
+# 同时出 Intel(x64) 和 Apple Silicon(arm64) 的 .dmg + .zip
+npm run dist:mac
+
+# 只打当前架构 + dmg
+npm run dist:mac:dmg
+
+# 只想要解压目录（调试时用，最快）
+npm run dist:mac:dir
+```
+
+产物：
+
+| 路径 | 用途 |
+| --- | --- |
+| `release/BOSS自动招呼助手-0.1.0-x64.dmg` | Intel Mac 安装镜像 |
+| `release/BOSS自动招呼助手-0.1.0-arm64.dmg` | Apple Silicon 安装镜像 |
+| `release/mac-arm64/BOSS自动招呼助手.app` | 解压版 .app（直接拖进去就能跑） |
+
+### 7.3 安装与首次运行注意
+
+**Windows**：未签名，SmartScreen 会拦截，点「更多信息 → 仍要运行」。
+
+**macOS**：未做 Apple 公证，首次启动会提示「已损坏 / 无法验证开发者」。两种解决：
+
+```bash
+# 方法 A：右键点 .app → 打开 → 仍然打开（一次后系统会记住）
+
+# 方法 B：直接清掉 quarantine 标记（推荐）
+xattr -dr com.apple.quarantine "/Applications/BOSS自动招呼助手.app"
+```
+
+### 7.4 数据目录
+
+打包后的应用，用户数据（浏览器 profile / SQLite / 日志）写在：
+
+| 平台 | 路径 |
+| --- | --- |
+| Windows | `%APPDATA%\AutoResume\` |
+| macOS | `~/Library/Application Support/AutoResume/` |
+| Linux | `~/.local/share/AutoResume/` |
+
+卸载或重装应用都不会清掉数据；想重新登录某账号就删对应的 `profiles/<task_id>/` 即可。
+
+## 直接下载可运行包
+
+https://github.com/wangrujun2016/auto-resume-package

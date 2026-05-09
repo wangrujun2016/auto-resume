@@ -19,13 +19,15 @@ let pyProcess = null;
  * 打包后的 backend 路径。electron-builder 会把 backend/dist/auto-resume-backend
  * 整个目录拷到 resources/backend，里面是 PyInstaller onedir 输出（含 ms-playwright）。
  * 开发期不进入此函数。
+ *
+ * 跨平台：Windows 是 .exe，macOS/Linux 是无扩展名的可执行文件。
  */
 function resolveBackendExePath() {
+  const exeName = process.platform === 'win32' ? 'auto-resume-backend.exe' : 'auto-resume-backend';
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'backend', 'auto-resume-backend.exe');
+    return path.join(process.resourcesPath, 'backend', exeName);
   }
-  // 非打包但 NODE_ENV !== 'development'（如手动测试）：用 backend/dist 下的产物
-  return path.join(__dirname, '..', 'backend', 'dist', 'auto-resume-backend', 'auto-resume-backend.exe');
+  return path.join(__dirname, '..', 'backend', 'dist', 'auto-resume-backend', exeName);
 }
 
 function startPythonBackend() {
@@ -91,9 +93,19 @@ app.whenReady().then(() => {
   });
 });
 
+function killBackend() {
+  if (!pyProcess) return;
+  try { pyProcess.kill(); } catch (_) { /* noop */ }
+  pyProcess = null;
+}
+
 app.on('window-all-closed', () => {
-  if (pyProcess) {
-    try { pyProcess.kill(); } catch (e) { /* noop */ }
-  }
-  if (process.platform !== 'darwin') app.quit();
+  // macOS 习惯：关闭最后一个窗口不退出 app；其他平台直接退出
+  if (process.platform === 'darwin') return;
+  killBackend();
+  app.quit();
 });
+
+// macOS 上 quit 时确保后端被回收
+app.on('before-quit', killBackend);
+app.on('will-quit', killBackend);
