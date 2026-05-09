@@ -415,16 +415,29 @@ class BossAutomator:
                   .map(a => a.closest('li, [class*="job-card"]') || a.parentElement)
                   .filter(Boolean);
               }
+              // BOSS 用自定义 web font 把薪资数字映射到 PUA 区（U+E000-U+F8FF），
+              // innerText 取出来是乱码方框；克隆节点后剥掉薪资/标签子节点，再清掉残留 PUA 字符
+              const PUA = /[\uE000-\uF8FF]/g;
+              const clean = (s) => (s || '').replace(PUA, '').replace(/\s+/g, ' ').trim();
+              const pickClean = (el, sel) => {
+                const node = el.querySelector(sel);
+                if (!node) return '';
+                const c = node.cloneNode(true);
+                c.querySelectorAll(
+                  '.salary, [class*="salary"], .job-info, [class*="job-info"], '
+                  + '.tag-list, [class*="tag-list"], .job-limit'
+                ).forEach(n => n.remove());
+                return clean(c.innerText || c.textContent || '');
+              };
               return items.map((el, i) => {
                 const link = el.querySelector('a[href*="/job_detail/"], a.job-card-left');
-                const title = (el.querySelector('.job-name, .job-title, [class*="job-name"]')?.innerText || '').trim();
-                const salary = (el.querySelector('.salary, [class*="salary"]')?.innerText || '').trim();
-                const company = (el.querySelector('.company-name, [class*="company-name"], [class*="company"] a')?.innerText || '').trim();
+                const title = pickClean(el, '.job-name, .job-title, [class*="job-name"]');
+                const company = pickClean(el, '.company-name, [class*="company-name"], [class*="company"] a');
                 const tags = Array.from(el.querySelectorAll('.tag-list li, .job-info .tag, .tag-list span, [class*="tag-list"] *'))
-                  .map(t => t.innerText.trim()).filter(Boolean).join(' ');
+                  .map(t => clean(t.innerText)).filter(Boolean).join(' ');
                 const href = link?.getAttribute('href') || '';
                 const greeted = !!el.querySelector('.start-chat-btn.greet-disable, [class*="greeted"], [class*="greet-disable"]');
-                return { idx: i, title, salary, company, tags, href, greeted };
+                return { idx: i, title, company, tags, href, greeted };
               }).filter(c => c.title || c.href);
             }
             """
