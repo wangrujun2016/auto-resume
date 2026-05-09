@@ -183,10 +183,10 @@ npm run dist:win
 
 产物：
 
-| 路径 | 用途 |
-| --- | --- |
-| `release/BOSS自动招呼助手-Setup-0.1.0.exe` | NSIS 安装包（双击安装） |
-| `release/win-unpacked/` | 解压版（直接跑里面的 .exe，不用安装） |
+| 路径                                       | 用途                                  |
+| ------------------------------------------ | ------------------------------------- |
+| `release/BOSS自动招呼助手-Setup-0.1.0.exe` | NSIS 安装包（双击安装）               |
+| `release/win-unpacked/`                    | 解压版（直接跑里面的 .exe，不用安装） |
 
 ### 7.2 macOS（在 Mac 上）
 
@@ -218,11 +218,11 @@ npm run dist:mac:dir
 
 产物：
 
-| 路径 | 用途 |
-| --- | --- |
-| `release/BOSS自动招呼助手-0.1.0-x64.dmg` | Intel Mac 安装镜像 |
-| `release/BOSS自动招呼助手-0.1.0-arm64.dmg` | Apple Silicon 安装镜像 |
-| `release/mac-arm64/BOSS自动招呼助手.app` | 解压版 .app（直接拖进去就能跑） |
+| 路径                                       | 用途                            |
+| ------------------------------------------ | ------------------------------- |
+| `release/BOSS自动招呼助手-0.1.0-x64.dmg`   | Intel Mac 安装镜像              |
+| `release/BOSS自动招呼助手-0.1.0-arm64.dmg` | Apple Silicon 安装镜像          |
+| `release/mac-arm64/BOSS自动招呼助手.app`   | 解压版 .app（直接拖进去就能跑） |
 
 ### 7.3 安装与首次运行注意
 
@@ -241,14 +241,14 @@ xattr -dr com.apple.quarantine "/Applications/BOSS自动招呼助手.app"
 
 打包后的应用，用户数据（浏览器 profile / SQLite / 日志）写在：
 
-| 平台 | 路径 |
-| --- | --- |
-| Windows | `%APPDATA%\AutoResume\` |
-| macOS | `~/Library/Application Support/AutoResume/` |
-| Linux | `~/.local/share/AutoResume/` |
+| 平台    | 路径                                        |
+| ------- | ------------------------------------------- |
+| Windows | `%APPDATA%\AutoResume\`                     |
+| macOS   | `~/Library/Application Support/AutoResume/` |
+| Linux   | `~/.local/share/AutoResume/`                |
 
 卸载或重装应用都不会清掉数据；想重新登录某账号就删对应的 `profiles/<task_id>/` 即可。
 
-## 直接下载可运行包
+## 直接下载可运行包（windows）
 
 https://github.com/wangrujun2016/auto-resume-package
