@@ -251,4 +251,4 @@ xattr -dr com.apple.quarantine "/Applications/BOSS自动招呼助手.app"
 
 ## 直接下载可运行包（windows）
 
-https://github.com/wangrujun2016/auto-resume-package
+链接: https://pan.baidu.com/s/1e5lkqYONlNzEwfoY3aVMmQ?pwd=8bkt 提取码: 8bkt
