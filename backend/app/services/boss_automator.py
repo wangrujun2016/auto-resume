@@ -156,6 +156,10 @@ class BossAutomator:
         self._pause_event = asyncio.Event()
         self._pause_event.set()  # set = 不暂停
 
+        # BOSS 服务端硬上限标记：弹出「无法进行沟通 / 明天再来」时由 _dismiss_after_send 置 True，
+        # _loop_greet 下个循环检测到就立即结束整个任务（不再继续后续子任务）
+        self._daily_limit_hit = False
+
     # ---------------- 外部控制 ----------------
     def request_stop(self) -> None: self._stop_event.set(); self._pause_event.set()
     def request_pause(self) -> None: self._pause_event.clear()
@@ -282,6 +286,10 @@ class BossAutomator:
 
         for sub_index, sub in enumerate(self.sub_tasks):
             if self._stop_event.is_set(): return
+            if self._daily_limit_hit:
+                await self._log("ERROR", "BOSS 服务端已限制今日沟通，停止后续子任务")
+                await self._push_status("finished", {"sent_today": total_sent, "reason": "boss_daily_limit"})
+                return
             self._sub_index = sub_index
             self.filter = sub.filter  # 让 _navigate_search/_build_search_url 用当前子任务条件
 
@@ -297,6 +305,12 @@ class BossAutomator:
 
             while not self._stop_event.is_set():
                 await self._pause_event.wait()
+
+                # BOSS 服务端硬上限：发完弹窗里出现「明天再来」时由 _dismiss_after_send 置位
+                if self._daily_limit_hit:
+                    await self._log("ERROR", "BOSS 已达每日沟通上限（150 次封顶），任务终止，明日再试")
+                    await self._push_status("finished", {"sent_today": total_sent, "reason": "boss_daily_limit"})
+                    return
 
                 if total_sent >= self.daily_limit:
                     await self._log("SUCCESS", f"今日总上限 {self.daily_limit} 已达，任务整体结束")
@@ -321,6 +335,8 @@ class BossAutomator:
                 for card in cards:
                     if self._stop_event.is_set(): return
                     await self._pause_event.wait()
+                    if self._daily_limit_hit:
+                        break  # 由外层 while 顶部统一记日志 + 推送状态
                     if sub_sent >= sub.limit or total_sent >= self.daily_limit:
                         break
                     ok = await self._try_greet_card(card)
@@ -567,33 +583,97 @@ class BossAutomator:
         return await self._dismiss_after_send(page)
 
     async def _dismiss_after_send(self, page: Page) -> bool:
-        """关闭「已向 BOSS 发送消息」确认弹窗。
+        """关闭发送后可能出现的弹窗。
 
-        策略：直接在整个 document.body 扫所有 button / a / span / div，
-        文本严格等于「留在此页」就点。失败时兜底点关闭 X。
+        BOSS 已知的几种弹窗：
+          1. 「已向 BOSS 发送消息」→ 点「留在此页」
+          2. 「温馨提示：您今天已与 N 位 BOSS 沟通，还剩 M 次沟通机会哦」→ 点「好」
+          3. 「无法进行沟通：您今天已与 150 位 BOSS 沟通，休息一下，明天再来吧」→ 点「确定」+ 标记上限触达
+          4. 老版输入弹窗 → 点「确定」「知道了」
+
+        策略：先尝试在弹窗容器内匹配按钮（精确），失败再全页扫描兜底。
+        如果命中硬上限弹窗（无法进行沟通/明天再来），会设 self._daily_limit_hit = True，
+        让 _loop_greet 在下次循环时整体结束任务。
         """
-        # 给弹窗最多 3 秒入场动画时间，间隔重试
-        for _ in range(6):
-            clicked = await page.evaluate(
+        # 0. 优先识别「无法进行沟通 / 明天再来」硬上限弹窗，设 flag（按钮会在下面统一点掉）
+        try:
+            limit_text = await page.evaluate(
                 """() => {
-                  const all = document.body.querySelectorAll('button, a, span, div, p');
-                  for (const el of all) {
-                    const t = (el.innerText || el.textContent || '').trim();
-                    if (t === '留在此页') {
-                      // 取该元素自身或最近的可点击祖先
-                      const target = el.closest('button, a, [role="button"]') || el;
-                      target.click();
-                      return 'stay';
+                  const SCOPES = ['[role="dialog"]', '.dialog-container', '.dialog-wrap',
+                                  '.greet-dialog', '.boss-popup', '.ant-modal',
+                                  '.boss-dialog', '.modal-dialog', '.ui-dialog'];
+                  const HIT = /无法进行沟通|明天再来|休息一下|沟通上限|今日已达|达到今日|已达今日/;
+                  for (const sel of SCOPES) {
+                    for (const c of document.querySelectorAll(sel)) {
+                      const t = (c.innerText || c.textContent || '').trim();
+                      if (t && HIT.test(t)) return t.replace(/\\s+/g, ' ').slice(0, 120);
                     }
                   }
                   return null;
                 }"""
             )
+            if limit_text and not self._daily_limit_hit:
+                self._daily_limit_hit = True
+                await self._log("ERROR", f"BOSS 已达每日沟通上限：{limit_text}")
+        except Exception:
+            pass
+
+        # 1. 给弹窗 3 秒入场动画时间，间隔重试
+        for _ in range(6):
+            clicked = await page.evaluate(
+                """() => {
+                  const TARGETS = ['留在此页', '好', '知道了', '我知道了', '确定'];
+                  // 候选弹窗容器：优先在弹窗作用域内点击，避免误点页面其他位置的同名按钮
+                  const SCOPES = [
+                    '[role="dialog"]', '.dialog-container', '.dialog-wrap',
+                    '.greet-dialog', '.boss-popup', '.ant-modal',
+                    '.boss-dialog', '.modal-dialog', '.ui-dialog',
+                  ];
+                  const tryClick = (root) => {
+                    const els = root.querySelectorAll('button, a, [role="button"], span, div, p');
+                    for (const el of els) {
+                      const t = (el.innerText || el.textContent || '').trim();
+                      if (TARGETS.includes(t)) {
+                        const tag = el.tagName;
+                        // 短文本「好」「确定」要求自身就是 button 类元素，避免误点纯文本
+                        const strict = t.length <= 2;
+                        if (strict && tag !== 'BUTTON' && tag !== 'A' && el.getAttribute('role') !== 'button') {
+                          const btnAncestor = el.closest('button, a, [role="button"]');
+                          if (!btnAncestor) continue;
+                          btnAncestor.click();
+                          return t;
+                        }
+                        const target = el.closest('button, a, [role="button"]') || el;
+                        target.click();
+                        return t;
+                      }
+                    }
+                    return null;
+                  };
+                  // 1) 弹窗 scope 内匹配
+                  for (const sel of SCOPES) {
+                    const containers = document.querySelectorAll(sel);
+                    for (const c of containers) {
+                      const r = tryClick(c);
+                      if (r) return r;
+                    }
+                  }
+                  // 2) 全页兜底（仅严格匹配 button/a，避免误伤）
+                  const all = document.body.querySelectorAll('button, a, [role="button"]');
+                  for (const el of all) {
+                    const t = (el.innerText || el.textContent || '').trim();
+                    if (TARGETS.includes(t)) { el.click(); return t; }
+                  }
+                  return null;
+                }"""
+            )
             if clicked:
+                if clicked != "留在此页":
+                    self.log.info(f"已关闭弹窗：{clicked}")
                 return True
             await page.wait_for_timeout(500)
 
-        # 兜底：找弹窗的关闭 X
+        # 兜底：点弹窗的关闭 X
         try:
             await page.evaluate(
                 """() => {
