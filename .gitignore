@@ -1,0 +1,35 @@
+# Node
+node_modules/
+dist/
+dist-electron/
+out/
+.vite/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# 用户数据：每个账号的浏览器 profile（含 cookie），绝对不上传
+backend/data/
+backend/logs/
+*.sqlite
+*.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+build/
+release/

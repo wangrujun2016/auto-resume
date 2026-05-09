@@ -1,0 +1,65 @@
+{
+  "name": "auto-resume",
+  "version": "0.1.0",
+  "description": "BOSS 直聘自动打招呼桌面助手（多账号独立窗口）",
+  "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k -n PY,VITE,ELECTRON -c blue,green,magenta \"npm:dev:py\" \"npm:dev:web\" \"npm:dev:electron\"",
+    "dev:py": "cd backend && .venv\\Scripts\\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8765 --reload --reload-dir app",
+    "dev:web": "cd frontend && npm run dev",
+    "dev:electron": "wait-on http-get://127.0.0.1:5173 http-get://127.0.0.1:8765/health && cross-env NODE_ENV=development electron .",
+    "build:web": "cd frontend && npm run build",
+    "build:py": "cd backend && .venv\\Scripts\\python.exe -m PyInstaller --noconfirm --clean --onedir --name auto-resume-backend --collect-all patchright --collect-all uvicorn --collect-submodules app --hidden-import app.main run_server.py",
+    "build:browser": "node scripts/copy-browser.cjs",
+    "build:all": "npm run build:web && npm run build:py && npm run build:browser",
+    "dist": "npm run build:all && electron-builder --win nsis --x64",
+    "dist:dir": "npm run build:all && electron-builder --win dir --x64",
+    "install:all": "npm install && cd frontend && npm install"
+  },
+  "build": {
+    "appId": "com.autoresume.boss",
+    "productName": "BOSS自动招呼助手",
+    "asar": true,
+    "toolsets": {
+      "winCodeSign": "1.0.0"
+    },
+    "directories": {
+      "output": "release",
+      "buildResources": "build-assets"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend/dist/auto-resume-backend",
+        "to": "backend",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BOSS自动招呼助手"
+    }
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "cross-env": "^7.0.3",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "wait-on": "^8.0.1"
+  }
+}

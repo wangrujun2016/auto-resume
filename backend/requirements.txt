@@ -1,0 +1,6 @@
+fastapi==0.115.0
+uvicorn[standard]==0.31.0
+patchright==1.59.1
+pydantic==2.9.2
+python-multipart==0.0.12
+aiosqlite==0.20.0
